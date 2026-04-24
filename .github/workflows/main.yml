@@ -46,6 +46,7 @@ jobs:
           executor:
             debug: ${oc.env:DEBUG,null}
             send_empty: true
+            max_paper_num: 10
             source: ['arxiv']
           EOF
           echo "Use custom config:"
