@@ -23,6 +23,11 @@ def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _TOKEN_RE.findall(text)]
 
 
+def _is_chinese_language(language: str | None) -> bool:
+    normalized = str(language or '').lower()
+    return 'chinese' in normalized or '中文' in normalized
+
+
 def _bm25_pick(query: str, candidates: dict[str, str], k1: float = 1.5, b: float = 0.75) -> str:
     """Return the candidate key whose content best matches *query* by BM25."""
     query_tokens = _tokenize(query)
@@ -116,7 +121,6 @@ def extract_tex_code_from_tar(file_path:str, paper_id:str, paper_title:str | Non
 
     if main_tex is not None:
         main_source:str = file_contents[main_tex]
-        #find and replace all included sub-files
         include_files = re.findall(r'\\input\{(.+?)\}', main_source) + re.findall(r'\\include\{(.+?)\}', main_source)
         for f in include_files:
             if not f.endswith('.tex'):
@@ -145,6 +149,8 @@ def send_email(config:DictConfig, html:str):
     password = config.email.sender_password
     smtp_server = config.email.smtp_server
     smtp_port = config.email.smtp_port
+    language = config.llm.get('language', 'English')
+
     def _format_addr(s):
         name, addr = parseaddr(s)
         return formataddr((Header(name, 'utf-8').encode(), addr))
@@ -153,7 +159,11 @@ def send_email(config:DictConfig, html:str):
     msg['From'] = _format_addr('Github Action <%s>' % sender)
     msg['To'] = _format_addr('You <%s>' % receiver)
     today = datetime.datetime.now().strftime('%Y/%m/%d')
-    msg['Subject'] = Header(f'Daily arXiv {today}', 'utf-8').encode()
+    if _is_chinese_language(language):
+        subject = f'每日 arXiv 推荐 {today}'
+    else:
+        subject = f'Daily arXiv {today}'
+    msg['Subject'] = Header(subject, 'utf-8').encode()
 
     try:
         server = smtplib.SMTP(smtp_server, smtp_port)
