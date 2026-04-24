@@ -16,7 +16,6 @@ def _get_strings(language: str | None) -> dict[str, str]:
             'tldr': '摘要',
             'pdf': 'PDF',
             'unknown_score': '未知',
-            'unknown_affiliation': '未知机构',
         }
     return {
         'footer': 'To unsubscribe, remove your email in your Github Action setting.',
@@ -25,7 +24,6 @@ def _get_strings(language: str | None) -> dict[str, str]:
         'tldr': 'TLDR',
         'pdf': 'PDF',
         'unknown_score': 'Unknown',
-        'unknown_affiliation': 'Unknown Affiliation',
     }
 
 
@@ -84,8 +82,14 @@ def get_empty_html(empty_text: str | None = None):
     return block_template
 
 
-def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str, strings: dict[str, str] | None = None):
+def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str | None = None, strings: dict[str, str] | None = None):
     strings = strings or _get_strings('English')
+    affiliation_html = ''
+    if affiliations:
+        affiliation_html = f"""
+            <br>
+            <i>{affiliations}</i>
+        """
     block_template = """
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
     <tr>
@@ -96,8 +100,7 @@ def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affi
     <tr>
         <td style="font-size: 14px; color: #666; padding: 8px 0;">
             {authors}
-            <br>
-            <i>{affiliations}</i>
+            {affiliation_html}
         </td>
     </tr>
     <tr>
@@ -124,7 +127,7 @@ def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affi
         rate=rate,
         tldr=tldr,
         pdf_url=pdf_url,
-        affiliations=affiliations,
+        affiliation_html=affiliation_html,
         relevance_label=strings['relevance'],
         tldr_label=strings['tldr'],
         pdf_label=strings['pdf'],
@@ -163,13 +166,12 @@ def render_email(papers:list[Paper], language: str = 'English') -> str:
             authors = ', '.join(author_list)
         else:
             authors = ', '.join(author_list[:3] + ['...'] + author_list[-2:])
+        affiliations = None
         if p.affiliations is not None:
             affiliations = p.affiliations[:5]
             affiliations = ', '.join(affiliations)
             if len(p.affiliations) > 5:
                 affiliations += ', ...'
-        else:
-            affiliations = strings['unknown_affiliation']
         parts.append(get_block_html(p.title, authors, rate, p.tldr or '', p.pdf_url or p.url, affiliations, strings))
 
     content = '<br>' + '</br><br>'.join(parts) + '</br>'
