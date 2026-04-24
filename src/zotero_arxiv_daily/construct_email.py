@@ -2,27 +2,55 @@ from .protocol import Paper
 import math
 
 
-framework = """
+def _is_chinese_language(language: str | None) -> bool:
+    normalized = str(language or '').lower()
+    return 'chinese' in normalized or '中文' in normalized
+
+
+def _get_strings(language: str | None) -> dict[str, str]:
+    if _is_chinese_language(language):
+        return {
+            'footer': '如需取消订阅，请在 GitHub Actions 设置中移除收件邮箱。',
+            'empty': '今天没有匹配论文，先休息一下。',
+            'relevance': '相关度',
+            'tldr': '摘要',
+            'pdf': 'PDF',
+            'unknown_score': '未知',
+            'unknown_affiliation': '未知机构',
+        }
+    return {
+        'footer': 'To unsubscribe, remove your email in your Github Action setting.',
+        'empty': 'No Papers Today. Take a Rest!',
+        'relevance': 'Relevance',
+        'tldr': 'TLDR',
+        'pdf': 'PDF',
+        'unknown_score': 'Unknown',
+        'unknown_affiliation': 'Unknown Affiliation',
+    }
+
+
+def get_framework(footer: str) -> str:
+    return f"""
 <!DOCTYPE HTML>
 <html>
 <head>
   <style>
-    .star-wrapper {
-      font-size: 1.3em; /* 调整星星大小 */
-      line-height: 1; /* 确保垂直对齐 */
+    .star-wrapper {{
+      font-size: 1.3em;
+      line-height: 1;
       display: inline-flex;
-      align-items: center; /* 保持对齐 */
-    }
-    .half-star {
+      align-items: center;
+    }}
+    .half-star {{
       display: inline-block;
-      width: 0.5em; /* 半颗星的宽度 */
+      width: 0.5em;
       overflow: hidden;
       white-space: nowrap;
       vertical-align: middle;
-    }
-    .full-star {
+    }}
+    .full-star {{
       vertical-align: middle;
-    }
+    }}
   </style>
 </head>
 <body>
@@ -33,26 +61,28 @@ framework = """
 
 <br><br>
 <div>
-To unsubscribe, remove your email in your Github Action setting.
+{footer}
 </div>
 
 </body>
 </html>
 """
 
-def get_empty_html():
-  block_template = """
+
+def get_empty_html(empty_text: str):
+  block_template = f"""
   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
   <tr>
     <td style="font-size: 20px; font-weight: bold; color: #333;">
-        No Papers Today. Take a Rest!
+        {empty_text}
     </td>
   </tr>
   </table>
   """
   return block_template
 
-def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str=None):
+
+def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str, strings: dict[str, str]):
     block_template = """
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
     <tr>
@@ -69,23 +99,34 @@ def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affi
     </tr>
     <tr>
         <td style="font-size: 14px; color: #333; padding: 8px 0;">
-            <strong>Relevance:</strong> {rate}
+            <strong>{relevance_label}:</strong> {rate}
         </td>
     </tr>
     <tr>
         <td style="font-size: 14px; color: #333; padding: 8px 0;">
-            <strong>TLDR:</strong> {tldr}
+            <strong>{tldr_label}:</strong> {tldr}
         </td>
     </tr>
 
     <tr>
         <td style="padding: 8px 0;">
-            <a href="{pdf_url}" style="display: inline-block; text-decoration: none; font-size: 14px; font-weight: bold; color: #fff; background-color: #d9534f; padding: 8px 16px; border-radius: 4px;">PDF</a>
+            <a href="{pdf_url}" style="display: inline-block; text-decoration: none; font-size: 14px; font-weight: bold; color: #fff; background-color: #d9534f; padding: 8px 16px; border-radius: 4px;">{pdf_label}</a>
         </td>
     </tr>
 </table>
 """
-    return block_template.format(title=title, authors=authors,rate=rate, tldr=tldr, pdf_url=pdf_url, affiliations=affiliations)
+    return block_template.format(
+        title=title,
+        authors=authors,
+        rate=rate,
+        tldr=tldr,
+        pdf_url=pdf_url,
+        affiliations=affiliations,
+        relevance_label=strings['relevance'],
+        tldr_label=strings['tldr'],
+        pdf_label=strings['pdf'],
+    )
+
 
 def get_stars(score:float):
     full_star = '<span class="full-star">⭐</span>'
@@ -104,14 +145,15 @@ def get_stars(score:float):
         return '<div class="star-wrapper">'+full_star * full_star_num + half_star * half_star_num + '</div>'
 
 
-def render_email(papers:list[Paper]) -> str:
+def render_email(papers:list[Paper], language: str = 'English') -> str:
+    strings = _get_strings(language)
+    framework = get_framework(strings['footer'])
     parts = []
     if len(papers) == 0 :
-        return framework.replace('__CONTENT__', get_empty_html())
+        return framework.replace('__CONTENT__', get_empty_html(strings['empty']))
     
     for p in papers:
-        #rate = get_stars(p.score)
-        rate = round(p.score, 1) if p.score is not None else 'Unknown'
+        rate = round(p.score, 1) if p.score is not None else strings['unknown_score']
         author_list = [a for a in p.authors]
         num_authors = len(author_list)
         if num_authors <= 5:
@@ -124,8 +166,8 @@ def render_email(papers:list[Paper]) -> str:
             if len(p.affiliations) > 5:
                 affiliations += ', ...'
         else:
-            affiliations = 'Unknown Affiliation'
-        parts.append(get_block_html(p.title, authors, rate, p.tldr, p.pdf_url, affiliations))
+            affiliations = strings['unknown_affiliation']
+        parts.append(get_block_html(p.title, authors, rate, p.tldr or '', p.pdf_url or p.url, affiliations, strings))
 
     content = '<br>' + '</br><br>'.join(parts) + '</br>'
     return framework.replace('__CONTENT__', content)
