@@ -69,20 +69,23 @@ def get_framework(footer: str) -> str:
 """
 
 
-def get_empty_html(empty_text: str):
-  block_template = f"""
+def get_empty_html(empty_text: str | None = None):
+    strings = _get_strings('Chinese') if empty_text and '今天' in empty_text else _get_strings('English')
+    text = empty_text or strings['empty']
+    block_template = f"""
   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
   <tr>
     <td style="font-size: 20px; font-weight: bold; color: #333;">
-        {empty_text}
+        {text}
     </td>
   </tr>
   </table>
   """
-  return block_template
+    return block_template
 
 
-def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str, strings: dict[str, str]):
+def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str, strings: dict[str, str] | None = None):
+    strings = strings or _get_strings('English')
     block_template = """
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
     <tr>
