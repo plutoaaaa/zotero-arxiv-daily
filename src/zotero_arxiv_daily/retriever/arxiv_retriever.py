@@ -12,6 +12,7 @@ from queue import Empty
 from typing import Any, Callable, TypeVar
 from loguru import logger
 import requests
+import re
 
 T = TypeVar("T")
 
@@ -105,6 +106,21 @@ def _extract_text_from_tar_worker(source_url: str, paper_id: str, paper_title: s
         return file_contents["all"]
 
 
+def _normalize_arxiv_id(paper_id: str) -> str:
+    return re.sub(r"v\d+$", "", paper_id)
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
+
+
 @register_retriever("arxiv")
 class ArxivRetriever(BaseRetriever):
     def __init__(self, config):
@@ -123,18 +139,32 @@ class ArxivRetriever(BaseRetriever):
         raw_papers = []
         allowed_announce_types = {"new", "cross"} if include_cross_list else {"new"}
         all_paper_ids = [
-            i.id.removeprefix("oai:arXiv.org:")
+            _normalize_arxiv_id(i.id.removeprefix("oai:arXiv.org:"))
             for i in feed.entries
             if i.get("arxiv_announce_type", "new") in allowed_announce_types
         ]
+        all_paper_ids = _dedupe_preserve_order(all_paper_ids)
         if self.config.executor.debug:
             all_paper_ids = all_paper_ids[:10]
 
         # Get full information of each paper from arxiv api
         bar = tqdm(total=len(all_paper_ids))
         for i in range(0, len(all_paper_ids), 20):
-            search = arxiv.Search(id_list=all_paper_ids[i:i + 20])
-            batch = list(client.results(search))
+            batch_ids = all_paper_ids[i:i + 20]
+            search = arxiv.Search(id_list=batch_ids)
+            try:
+                batch = list(client.results(search))
+            except arxiv.HTTPError as exc:
+                logger.warning(
+                    f"Batch arXiv lookup failed for {batch_ids} with {exc}. Falling back to per-paper requests."
+                )
+                batch = []
+                for paper_id in batch_ids:
+                    try:
+                        single_search = arxiv.Search(id_list=[paper_id])
+                        batch.extend(list(client.results(single_search)))
+                    except arxiv.HTTPError as single_exc:
+                        logger.warning(f"Skipping arXiv paper {paper_id}: {single_exc}")
             bar.update(len(batch))
             raw_papers.extend(batch)
         bar.close()
