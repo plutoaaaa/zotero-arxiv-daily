@@ -40,13 +40,13 @@ jobs:
 
           source:
             arxiv:
-              category: ["cs.LG", "cs.AI", "cond-mat.mtrl-sci", "physics.chem-ph"]
+              category: ["cs.LG", "stat.ML", "cs.AI", "cond-mat.mtrl-sci", "physics.chem-ph"]
               include_cross_list: false
 
           executor:
             debug: ${oc.env:DEBUG,null}
             send_empty: true
-            max_paper_num: 5
+            max_paper_num: 10
             source: ['arxiv']
           EOF
           echo "Use custom config:"
