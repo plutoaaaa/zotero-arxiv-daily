@@ -40,7 +40,7 @@ jobs:
 
           source:
             arxiv:
-              category: ["cs.LG", "stat.ML", "cs.AI", "cond-mat.mtrl-sci", "physics.chem-ph"]
+              category: ["cs.LG", "stat.ML", "physics.comp-ph", "physics.chem-ph", "cond-mat.mtrl-sci"]
               include_cross_list: false
 
           executor:
