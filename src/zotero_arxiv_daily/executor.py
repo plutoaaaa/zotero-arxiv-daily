@@ -39,6 +39,7 @@ class Executor:
         }
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
         self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
+
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
         logger.info("Fetching zotero corpus")
         zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)
@@ -46,11 +47,13 @@ class Executor:
         collections = {c['key']:c for c in collections}
         corpus = zot.everything(zot.items(itemType='conferencePaper || journalArticle || preprint'))
         corpus = [c for c in corpus if c['data']['abstractNote'] != '']
+
         def get_collection_path(col_key:str) -> str:
             if p := collections[col_key]['data']['parentCollection']:
                 return get_collection_path(p) + '/' + collections[col_key]['data']['name']
             else:
                 return collections[col_key]['data']['name']
+
         for c in corpus:
             paths = [get_collection_path(col) for col in c['data']['collections']]
             c['paths'] = paths
@@ -89,7 +92,14 @@ class Executor:
             logger.info(f"Selected {len(corpus)} zotero papers:\n{samples}\n...")
         return corpus
 
-    
+    def apply_quality_gate(self, papers):
+        min_score = self.config.executor.get('min_score', None)
+        if min_score is None:
+            return papers
+        kept = [p for p in papers if p.score is not None and p.score >= min_score]
+        logger.info(f"Quality gate kept {len(kept)}/{len(papers)} papers with score >= {min_score}")
+        return kept
+
     def run(self):
         corpus = self.fetch_zotero_corpus()
         corpus = self.filter_corpus(corpus)
@@ -110,7 +120,11 @@ class Executor:
         if len(all_papers) > 0:
             logger.info("Reranking papers...")
             reranked_papers = self.reranker.rerank(all_papers, corpus)
+            reranked_papers = self.apply_quality_gate(reranked_papers)
             reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
+            if len(reranked_papers) == 0 and not self.config.executor.send_empty:
+                logger.info("No papers passed the quality gate. No email will be sent.")
+                return
             logger.info("Generating TLDR...")
             for p in tqdm(reranked_papers):
                 p.generate_tldr(self.openai_client, self.config.llm)
