@@ -43,7 +43,8 @@ jobs:
 
           executor:
             debug: ${oc.env:DEBUG,null}
-            send_empty: true
+            send_empty: false
+            min_score: 7.0
             max_paper_num: 10
             source: ['arxiv']
           EOF
